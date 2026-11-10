@@ -1,0 +1,10 @@
+# Tooling config only (the app is run as a plain package, not built/published to PyPI).
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [".venv", "data"]
+
+[tool.ruff.lint]
+# E/F = pycodestyle+pyflakes, I = import order, B = bugbear (real bugs), UP = modern syntax
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008"]  # FastAPI's Depends(...) in defaults is the documented pattern
