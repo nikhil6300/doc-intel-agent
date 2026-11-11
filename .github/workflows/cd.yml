@@ -1,0 +1,59 @@
+# CD: pushing a version tag (e.g. v0.1.0) runs CI, builds the image, publishes it to GHCR,
+# then (after manual approval) "deploys". The deploy step is a placeholder until Week 7 (AWS).
+name: CD
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml      # reusable workflow: same checks as every PR
+
+  publish:
+    name: publish image
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write                     # needed to push to ghcr.io with the built-in token
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # no secret to create: GitHub injects it
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    name: deploy (placeholder)
+    needs: publish
+    runs-on: ubuntu-latest
+    # Create an Environment named "production" in repo Settings and add yourself as a
+    # required reviewer: this job will then PAUSE until you click "Approve".
+    environment: production
+    steps:
+      - name: Deploy
+        run: |
+          echo "Would deploy the image published above to AWS (ECS/AgentCore) here."
+          echo "Published tags:"
+          echo "${{ needs.publish.outputs.image }}"
