@@ -65,7 +65,7 @@ jobs:
           done
           curl -fsS -X POST http://localhost:8000/v1/query \
             -H 'content-type: application/json' \
-            -d '{"question":"How often must Tier 1 vendors be reassessed?"}' | grep -q vendor_risk_policy
+            -d '{"question":"How often must Tier 1 vendors be reassessed?"}' | grep -q does_not_exist
       - name: Show container logs on failure
         if: failure()
         run: docker logs api
