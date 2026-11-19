@@ -3,6 +3,8 @@ services:
     build: .
     ports: ["8000:8000"]
     env_file: [.env]
+      - path: .env
+        required: false
     volumes:
       - index:/app/data/index
   mcp:                      # remote-capable MCP server (streamable HTTP) in front of the API
