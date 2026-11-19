@@ -69,3 +69,5 @@ jobs:
       - name: Show container logs on failure
         if: failure()
         run: docker logs api
+      - name: validate compose file
+        run: docker compose config -q
