@@ -5,5 +5,5 @@ pydantic-settings>=2.3,<3
 numpy>=1.26,<3
 faiss-cpu>=1.8,<2
 httpx>=0.27,<1
-openai>=1.40
+openai>=3.46.0
 mcp>=2.3,<3
