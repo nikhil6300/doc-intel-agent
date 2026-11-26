@@ -12,8 +12,12 @@ class EvalClient:
         self.http = http
 
     @classmethod
-    def from_url(cls, url: str, api_key: str | None = None, timeout: float = 300.0) -> "EvalClient":
+    def from_url(
+        cls, url: str, api_key: str | None = None, timeout: float = 300.0, reviewer_key: str | None = None
+    ) -> "EvalClient":
         headers = {"X-API-Key": api_key} if api_key else {}
+        if reviewer_key:
+            headers["X-Reviewer-Key"] = reviewer_key
         return cls(httpx.Client(base_url=url, headers=headers, timeout=timeout))
 
     def _call(self, method: str, path: str, **kwargs: Any) -> tuple[Any, float]:
@@ -46,3 +50,6 @@ class EvalClient:
 
     def health(self) -> dict:
         return self._call("GET", "/health")[0]
+
+    def review_export(self, statuses: str = "edited,rejected") -> list[dict]:
+        return self._call("GET", "/v1/review/export", params={"statuses": statuses})[0]
