@@ -4,3 +4,5 @@ __pycache__/
 .env
 data/index/
 .pytest_cache/
+data/corpus/
+eval_runs/*.json
