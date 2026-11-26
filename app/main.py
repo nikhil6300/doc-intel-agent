@@ -18,8 +18,10 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from app import __version__
 from app.config import Settings, get_settings
 from app.embeddings import build_embedder
+from app.hitl import build_review_router
 from app.llm import build_llm
 from app.rag import RAGService, UpstreamError
+from app.reviews import ReviewStore, apply_hitl, assess
 from app.schemas import (
     Document,
     DocumentInfo,
@@ -28,6 +30,7 @@ from app.schemas import (
     QueryRequest,
     QueryResponse,
     SearchResponse,
+    Source,
 )
 from app.vectorstore import VectorStore
 
@@ -49,9 +52,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             docs, chunks = await service.ingest_directory(settings.data_dir)
             log.info("Auto-ingested %d docs / %d chunks from %s", docs, chunks, settings.data_dir)
             store.save(settings.index_dir, embedder.signature)
+        reviews = ReviewStore(settings.index_dir / "review.db")
         app.state.settings, app.state.service, app.state.embedder = settings, service, embedder
+        app.state.reviews = reviews
         yield
         store.save(settings.index_dir, embedder.signature)  # Shutdown: persist
+        reviews.close()
 
     app = FastAPI(
         title="Document Intelligence API",
@@ -124,13 +130,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return SearchResponse(query=q, results=await service.search(q, k))
 
     @v1.post("/query", response_model=QueryResponse)
-    async def query(body: QueryRequest, service: RAGService = Depends(get_service)) -> QueryResponse:
-        return await service.answer(body.question, body.top_k)
+    async def query(body: QueryRequest, request: Request, service: RAGService = Depends(get_service)) -> QueryResponse:
+        resp = await service.answer(body.question, body.top_k)
+        return apply_hitl(settings, request.app.state.reviews, body.question, resp)
 
     @v1.post("/query/stream")
-    async def query_stream(body: QueryRequest, service: RAGService = Depends(get_service)) -> StreamingResponse:
+    async def query_stream(
+        body: QueryRequest, request: Request, service: RAGService = Depends(get_service)
+    ) -> StreamingResponse:
+        if settings.hitl_mode == "gate":
+            raise HTTPException(status_code=409, detail="Streaming is disabled when HITL_MODE=gate; use POST /v1/query")
+
         async def sse() -> AsyncIterator[str]:
+            sources: list[Source] = []
+            tokens: list[str] = []
             async for ev in service.answer_stream(body.question, body.top_k):
+                if ev["event"] == "sources":
+                    sources = [Source(**x) for x in ev["data"]["sources"]]
+                elif ev["event"] == "token":
+                    tokens.append(ev["data"]["text"])
+                elif ev["event"] == "done" and settings.hitl_mode != "off":
+                    answer = "".join(tokens).strip()
+                    needs, reason = assess(answer, sources, settings.review_score_threshold)
+                    ev["data"]["query_id"] = request.app.state.reviews.record(
+                        question=body.question,
+                        answer=answer,
+                        sources=[x.model_dump() for x in sources],
+                        top_score=max((x.score for x in sources), default=0.0),
+                        needs_review=needs,
+                        reason=reason,
+                    )
+                    ev["data"].update(needs_review=needs, review_reason=reason)
                 yield f"event: {ev['event']}\ndata: {json.dumps(ev['data'])}\n\n"
 
         return StreamingResponse(
@@ -138,4 +168,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.include_router(v1)
+    app.include_router(build_review_router(require_api_key))
     return app

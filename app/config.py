@@ -40,6 +40,16 @@ class Settings(BaseSettings):
     # Drop retrieved chunks scoring below this cosine similarity. Tune it with evals (Week 2).
     min_score: float = Field(0.0, ge=0.0, le=1.0)
 
+    # --- Human in the loop --------------------------------------------------
+    # off  -> no review features, nothing is stored
+    # flag -> every answer is served immediately; risky ones are also queued for an analyst afterwards
+    # gate -> risky answers are WITHHELD until an analyst approves or corrects them (regulated use)
+    hitl_mode: Literal["off", "flag", "gate"] = "flag"
+    # Escalate answers whose best retrieved chunk scores below this (0 disables). Tune it with your evals.
+    review_score_threshold: float = Field(0.0, ge=0.0, le=1.0)
+    # When set, review endpoints also require header `X-Reviewer-Key: <value>` (separate from the consumer key).
+    reviewer_api_key: str | None = None
+
     # --- Storage ----------------------------------------------------------
     data_dir: Path = Path("data/sample_docs")
     index_dir: Path = Path("data/index")
