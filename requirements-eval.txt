@@ -1,0 +1,6 @@
+# Only needed for the Ragas generation metrics (python -m evals.ragas_runner). Kept out of CI on purpose.
+-r requirements.txt
+ragas==0.4.3
+# ragas 0.4.3 imports a module that langchain-community 0.4 removed; without this pin `import ragas` fails.
+langchain-community<0.4
+pandas
